@@ -1,0 +1,510 @@
+---
+title: "Projet visualisation de données :  \n Les unités d'Age of Empire II"
+author: "Jean-Baptiste BRASSELET & Philippe ZHANG"
+
+output: 
+  html_document:
+    theme: flatly
+    toc: true #table of content true
+    top_depth: 3 #upto three depths of headings (#, ##, ###)
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r message=TRUE, warning=TRUE, include=FALSE, paged.print=FALSE}
+##  Inclusion des bibliothèques nécessaires ##
+library("tibble")
+library("jsonlite")
+library("xml2")
+library("rvest")
+library(rmarkdown)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(ggpubr)
+
+```
+
+```{r message=TRUE, warning=FALSE, include=FALSE, paged.print=FALSE}
+##### Récuperation de données #####
+
+##### Lecture du fichier #####
+data_f <- read_csv("df.csv")
+
+##### Conversion character -> facteur #####
+data_f$Expansion <- as.factor(data_f$Expansion)
+data_f$Age <- as.factor(data_f$Age)
+data_f <- as_tibble(data_f)
+data_f$Type_atk <- as.factor(data_f$Type_atk)
+
+
+```
+
+
+```{r, fig.align='center',out.width = "400px"}
+knitr::include_graphics("Image/aoe2.png")
+```
+
+# Introduction
+
+Retrouvez ce projet sur Github à l'adresse : <https://github.com/neuroleptik/analyse_AOEII>
+
+## 1. Contextualisation
+
+Définition de wikipédia : https://fr.wikipedia.org/wiki/Age_of_Empires_II:_The_Age_of_Kings
+
+**Age of Empires II : The Age of Kings** est un jeu vidéo de **stratégie en temps réel** développé par Ensemble Studios et publié sur PC et MAC par Microsoft en 1999. Le jeu est le deuxième épisode de la série après Age of Empires, publié en 1997, et utilise le même moteur de jeu basé sur des sprites en 2D isométrique. L'action du jeu se déroule dans un contexte historique pendant le Moyen Âge, le joueur devant faire évoluer une civilisation à travers **quatre âges** — l’âge sombre, l’âge féodal, l’âge des châteaux et l’âge impérial — afin de débloquer de nouvelles technologies et unités pour bâtir un empire. Treize **civilisations** sont disponibles dans le jeu, chacune d'elles s'inspirant de civilisations médiévales d’Europe de l'Ouest, d’Europe de l'Est, du Moyen-Orient et de l’Asie de l'Est.
+Pour gagner, le joueur doit collecter des **ressources** qui lui permettent de **construire des bases** et de **créer une armée** capable de défaire l'adversaire.
+
+Voici ci dessous, une image représentant une partie de jeu:  
+  
+
+```{r, fig.align='center',out.width = "400px"}
+knitr::include_graphics("Image/fight.jpg")
+```
+
+## 2. Le projet
+
+Ce projet à été réalisé en collaboration avec Philippe Zhang, étudiant en intelligence artificielle.
+La forme du projet se concentres en trois parties majeurs, suivant le plan donné par notre enseignant,  c'est-à-dire :
+
+1. Présentation du dataset 
+2. Présentation d'une unité
+3. Comment battre le paladin ?
+
+Nous avons fait en sorte que chaque partie soit la mieux expliquée et la plus interactive possible.
+C'est pourquoi nous utiisons la package **Plotly** qui rend nos graphs interactifs. N'hésitez pas à survoler les graphiques présentés avec votre souris, cela vous donnera des informations supplémentaires. De plus il est possible d'utiliser la toolbar en haut à droite de chaque graphique pour zoomer et se déplacer dans le graphe.
+De plus, nous avons réalisé, à l'aide du package **Shiny**, un tableau de bord regroupant toutes les unités et affichant ses statistiques de la manière la plus ergonomique possible, sous forme de toile d'araignée, et de la comparer avec les autres unités en regroupant chaque statistique numérique en classe.
+
+Nous vous souhaitons une bonne lecture du document.
+
+# I. Présentation du dataset
+
+Ce dataset correspond au même que celui du projet de data mining, **les unités d'Age of Empire II**.
+
+## 1. Aperçu du dataset
+
+### a) Explication des variables
+
+Dans ce dataset, beaucoup de caractéristiques d'unité sont présentes, en voici la liste :
+
+1. Identifiant de l'unité dans l'API 
+2. Nom de l'unité
+3. Une description brève de l'unité
+4. L'extension d'où l'unité provient
+5. L'âge à partir duquel l'unité peut être crée
+6. Le bâtiment dans lequel l'unité est crée
+7. Le temps de construction en seconde
+8. Le temps de rechargement de l'arme en seconde
+9. Le temps que dure l'attaque de l'unité
+10. La vitesse de déplacement de l'unité
+11. Le champ de vision de l'unité
+12. Les points de vies de l'unité
+13. La distance d'attaque
+14. Les dégâts d'attaque
+15. La précision de l'unité
+16. Le coût en bois 
+17. Le coût en or
+18. Le coût en nourriture
+19. Les points d'armure classique (qui résiste aux attaques de mêlés)
+20. Les points d'armure de perçage (qui résiste aux projectiles)
+
+Nous avons donc **20 variables**, dont **18 utiles** à l'analyse, (si l'on enlève l'identifiant et la description de l'unité qui n'ont pas d'intérêt dans une analyse numérique).
+
+### b) Affichage du dataset
+
+Ci-dessous le dataset : 
+
+```{r}
+#fonction de rmarkdown permet d'afficher completement le dataset
+paged_table(data_f)
+```
+
+
+## 2. Les unités par extansion
+
+### a) Diagramme d'unité par âge et par extension
+
+On s'est tout d'abord demandé combien l'extension *"The Conquerors"* apportait d'unités au jeu. Nous avons donc réalisé un premier diagramme présentant le nombre d'unités par âge dans le jeu original mais aussi pour l'extension *"The Conquerors"*.
+```{r}
+#metter un ordre aux levets des Age Dark -> Feudal -> Castle -> Impérial
+data_f$Age <- factor(data_f$Age,levels = c("Dark", "Feudal", "Castle", "Imperial"))
+
+#ggplot : Diagramme en bâtons
+graphe1 <- ggplot(data_f, aes(x=Expansion, fill = Expansion)) + 
+ geom_bar(aes(fill=Age)) + 
+ labs(title = "Nombre d'unité par extansion", x = "extansion", y = "Effectif", fill = "Age") 
+
+ggplotly(graphe1)
+
+```
+**Ce que nous constatons : **   
+Nous constatons premièrement que l'extension *"The Conquerors"* apporte 16 nouvelles unités à celles déjà présente dans le jeu originale (qui en comporte 86). Ce qui monte le nombre d'unités totales à 102 unités et correspond à **15%** de toutes les unités.
+Nous constatons ensuite que le nombre d'unité entrainable au premier âge du jeu, est de 11 pour le jeu de base (13 en tout), ce qui représente **12%**.
+En poursuivant, nous nous rendons compte que presque aucune unité est débloquée à l'âge féodale (l'âge suivant) et que les âges suivants débloquent respectivement 40 et 41 unités.
+
+**Ce que nous pouvons en conclure : **   
+Nous pouvons premièrement conclure que l'extension *"The Conquerors"* apporte peut d'unités par rapport au nombre existant déjà dans le jeu original.
+Nous pouvons aussi affirmer que la plupart des unités se débloquent dans les deux derniers âges. Un joueur qui veut jouer la diversité devra donc passer les deux premiers âges pour avoir plus de choix.
+
+## 3. Les coûts
+
+### a) Coûts totaux cumulés par unité
+Dans un premier temps, nous avons réalisé un histogramme des coûts totaux en or, nourriture et bois afin d'avoir un aperçu sur le coût total moyen d'une unité et d'observer la tendance.
+
+Ci-dessous l'histogramme des coûts totaux : 
+
+```{r}
+# cout en ressource totale
+p_total <- ggplot(data_f, aes(x=Cost_wood+Cost_food+Cost_gold))+ 
+  geom_histogram(color="black", fill="white") + 
+  labs(title = "Histogramme de coût total des unités", x = "Coût total en bois, nourriture et or", y = "Effectif")
+
+ggplotly(p_total)
+
+```
+**Ce que nous constatons : **   
+Nous constatons que 9 unités sont totalement gratuites, ce sont des unités non entrainables présente dans les forêts, comme les cerfs ou les sangliers.
+Nous constatons aussi que la plupart des valeurs se concentrent autour de **50 et 200** et nous avons quelques unités qui sortent du lot et sont de plus en plus couteuses.
+
+**Ce que nous pouvons en conclure : **   
+Nous pouvons conclure qu'il faudra en moyenne débourser entre 46 et 200 unités au total pour produire une unité.
+Nous pouvons aussi dire que produire l'unité la plus couteuse du jeu va considérablement impacter notre économie avec un coût cumulé de **450 unités**
+
+
+### b) Coût moyen par ressources
+
+Nous avons ensuite voulu savoir comment étaient répartis les coûts par ressources, ce box plot représente cette répartition.  
+Ci-dessous l'histogramme des coûts moyen par ressources : 
+```{r}
+#ggplot : boîtes a moustaches
+boxplot(data_f$Cost_wood[data_f$Cost_wood!=0], data_f$Cost_gold[data_f$Cost_gold!=0], data_f$Cost_food[data_f$Cost_food!=0],
+        main = "Coût moyen en ressources",
+        at = c(1,3,5),
+        names = c("Bois", "Or", "Nourriture"),
+        horizontal = TRUE,
+        col = c("brown","yellow","red"))
+```
+  
+**Ce que nous constatons : **  
+Nous constatons que la répartition du coût de la nourriture n'est pas étalée et que sa médiane est globalement égale à sa moyenne. En revanche les coûts en or sont plus étalés (entre 30 et 75 environ) et la médiane est légèrement plus petite que la moyenne.
+Finalement, nous remarquons que la répartition des coûts en bois est très étalée (entre 40 et 160) et que sa médiane est environ au quart de la classe.
+
+**Ce que nous pouvons en conclure : **
+Nous pouvons conclure que peu importe les unités, les côuts en nourriture resteront quasiment les mêmes.Quant à l'or elle peut varier, mais le bois reste la ressource ayant le plus de dispersions, et cela est dû aux unités navales, qui coûtent énormément de bois.  
+  
+### c) Temps de construction en fonction du coût total de l'unité
+Nous avons ensuite voulu savoir s'il y avait une corrélation entre le coût d'une unité et son temps de fabrication.
+Ci-dessous le nuage de points du temps de construction en fonction du coût total de l'unité : 
+```{r}
+#Combinaison de 3 nuages de points 
+#Recherche de corrélation entre les ressources et le temps de construction 
+
+btw <- ggplot(data_f, aes(x=Build_time, y= Cost_wood+Cost_gold+Cost_food, label = Name)) + 
+  geom_point(aes(color = Age)) + 
+  geom_smooth() + 
+  labs(title = "Temps de construction en fonction du coût total de l'unité", x = "Temps de construction", y = "coût total") 
+
+ggplotly(btw)
+
+
+```
+**Ce que nous constatons : **      
+Nous constatons une corrélation des coûts et du temps de construction uniquement entre **0 et 37 secondes** de temps de construction, après cette valeur, les points ont tendance à se disperser.
+Nous remarquons que les unités de l'âge le plus avancé (impériale) ne mettent pas forcement plus de temps à sortir des bâtiments de production, cependant ils coutent en moyenne plus cher que les unités des autres âges.
+
+**Ce que nous pouvons en conclure : **    
+Nous pouvons conclure qu'il n'y a pas vraiment de lien global entre le temps de construction et le coût des unités même si les petits temps de constructions correspondent aux petits coûts.
+De plus, une armée d'unités de l'âge impériale aura tendance à coûter bien plus cher que les autres types d'unités des autres âges.
+
+  
+## 4. Les statistiques de combat 
+
+Dans cette section, nous allons nous concentrer sur les données propres à chaque unité et les comparer entre elles afin de pouvoir en sortir des corrélations.
+
+### a) Dégâts d'attaque en fonction des points de vie de l'unité
+```{r}
+health_attck <- ggplot(data_f, aes(x=Attack, y = HP, label= Name)) + 
+  geom_point(aes(color=Type_atk)) + 
+  labs(title = "Dégâts d'attaque en fonction des points de vie de l'unité",x = "Dégât d'attaque", y = "Points de vie", color ="Type d'attaque") 
+
+ggplotly(health_attck,tooltip=c("label","x", "y"))
+
+```
+**Ce que nous constatons : **  
+Nous constatons que la majorité des unités ont des points de vies situés entre 4 et 200 et que quelques autres unités sortent du lot.
+L'unité ayant le plus de point de vie est l'éléphant de guerre d'élite avec **600 points de vie**, l'archer de base en a le moins avec **4 points de vie**.
+L'unité ayant le plus de dégât d'attaque est le trébuchet (**200**) et celui qui en à le moins est le lanceur de lances (skirmisher) avec **2**.
+Nous voyons aussi que les unités de mêlée ont en moyenne plus de points de vie que les unités à distance.
+
+**Ce que nous pouvons en conclure : **  
+Nous pouvons conclure que les unités à distance sont plus vulnérables avec moins de points de vie en général.  
+Il faudra donc se constituer une avant-garde au corps-à-corps, et ensuite potentiellement jouer des unités à distance en arrière-garde si nous ne voulons pas la destruction rapide de notre armée. 
+
+### b) Dégâts d'attaque en fonction du champ de vision de l'unité
+```{r}
+
+attck_sight <- ggplot(data_f, aes(x=Attack, y = Line_of_Sight, label= Name)) + 
+  geom_point(aes(color=Type_atk)) +
+  labs(title = "Dégâts d'attaque en fonction du champs de vision de l'unité",x = "dégât d'attaque", y = "champs de vision", color ="Type d'attaque") 
+
+ggplotly(attck_sight, tooltip=c("label","x", "y"))
+
+```
+**Ce que nous constatons : **  
+Nous constatons que les unités de mêlée ont en général un champ de vision réduit (entre 3 et 6 en moyenne) par rapport aux unités à distance (entre 6 et 10)
+Le trébuchet est l'unité avec le plus de dégâts et de champ de vision.  
+
+**Ce que nous pouvons en conclure : **   
+Nous pouvons conclure que les unités à distance disposent de plus de champs de vision et restent des unités puissantes pour l'exploration.
+Une armée à distance sera alors capable de voir une armée au corps-à-corps avant que cette dernière ne la voit.
+Finalement, le trébucher est une unité très puissante pour les sièges offrant un champ de vision maximum pour des dégâts maximum, unité à ne pas négliger lors de vos parties.
+
+
+## 5. Le nombre d'unité par bâtiment de production
+Nous nous sommes demmandé quels étaient les bâtiments qui produisent le plus d'unités et ceux qui en fabriquent le moins.
+Nous avons donc réalisé un diagramme représentant les noms des bâtiments en fonction du nombre d'unités produites.
+
+```{r}
+#ggplot : Diagramme en bâtons
+graphe1 <- ggplot(data_f, aes(x=Created_in)) + 
+ geom_bar(aes(fill=Type_atk)) + 
+ labs(title = "Nombre d'unité par extansion", x = "Bâtiment", y = "Effectif", fill = "Age") 
+
+
+ggplotly(graphe1 + theme(axis.text.x=element_blank()))
+
+```
+**Ce que nous constatons : **   
+Nous constatons que le bâtiment qui produit le plus d'unités est le château.
+L'archerie et la caserne produisent respectivement et uniquement que des unités à distance et de corps-à-corps, ce qui est logique. 
+Le port et l'atelier de sièges quant à eux, produisent des deux types.
+
+**Ce que nous pouvons en conclure : **   
+Nous pouvons en conclure que c'est le château qui a le plus d'unité unique, cependant cela est faussé puisque chaque civilisation à deux unités unique dans son château. Il y a donc (2 fois) autant d'unité unique qu'il y a de civilisation, d'où ce grand nombre. 
+Le port reste un bon compromis pour se battre en mer proposant des unités à distance mais aussi de mêlée, tout comme l'atelier de siège sur terre.
+
+# II. Présentation d'une unité  
+
+
+Cette partie a principalement été réalisée par notre application Shiny qui consiste à montrer les caractéristiques globales de chaque unité.
+Dans un premier temps, nous allons vous présenter notre dashboard Shiny, puis vous présenter une unité en détail : le champion.
+
+## 1. Présentation du dashboard
+
+Notre application Shiny est constituée de 4 parties : descriptions générales, statistiques, coûts de l'unité et d'une barre de menus avec une liste déroulante de toutes les unités.
+
+### a) Menu de séléction des unités
+
+Tout d'abord, pour avoir la présentation d'une unité il suffit de sélectionner une unité dans la liste des unités disponibles dans la barre de menus à gauche.
+
+```{r echo=FALSE, warning=FALSE, fig.align='center', out.width="200px", paged.print=FALSE }
+
+knitr::include_graphics("Image/liste.png")
+
+```
+
+### b) Descriptions générales
+En second lieu, nous avons la partie "descriptions générales" dans laquelle nous trouvons le nom, l'extansion, l'âge, la description et le type d'attaque de l'unité. 
+
+![](Image/descriptions.png)
+
+### c) Partie "statistiques"
+Ensuite, la partie "statistiques" affiche les statistiques de l'unité dans un graphique radar, ou en toile d'araignée. Ce graphe permet de visualiser toutes les statistiques de l'unité dans un seul graphe. Nous pouvons également voir les statistiques maximales et les comparer avec les statistiques de l'unité sélectionnée, ce qui rend ce graphe très intéressant pour la vue globale.  
+
+Nous pouvons également voir les points forts et les points faibles de l'unité, par exemple : si elle a une bonne défense ou encore une vitesse de déplacement élevée ou non. 
+
+De plus, afin de faciliter la compréhension des statistiques des unités, nous avons ajouté des descriptions : FAIBLE(LOW), MOYEN(DECENT), BON(GOOD), ELEVEE(HIGH) et EXCELLENT. 
+
+![](Image/stats.png)
+
+### d) Partie "coûts en ressources"
+Enfin pour la dernière partie, nous affichons l'ensemble des coûts en ressources à savoir le bois, l'or, la nourriture et le temps de constructions de l'unité. Pour l'affichage, nous avons utilisé un diagramme en bâton. 
+
+![](Image/couts.png)
+
+
+
+
+## 2. Présentation du champion 
+
+Nous allons maintenant passer à la présentation d'une unité : le champion.
+  
+### a) Illustration du champion
+```{r, fig.align='left',out.width = "200px"}
+knitr::include_graphics("Image/champion.png")
+```
+
+### b) Descriptions générales et statistique du champion
+
+![](Image/infantry1.png)
+
+### c) Coûts en ressources du champion
+
+![](Image/infantry2.png)
+
+### d) Analyse des graphiques de l'unité
+
+**Ce que nous constatons : **  
+
+Tout d'abord, d'après la description nous pouvons voir que le champion est une unité de Age of Kings (jeu de base) , de l'âge impérial et qu'il est la forme évolué du fantassin à épée à deux mains (Two-Handed Swordsman). On constate également que l'unité est spécialisé dans l'attaque mêlée à savoir le combat corps-à-corps. 
+
+Ensuite, à partir des statistiques, nous observons rapidement que le champion ne peut en aucun cas attaquer à distance car les valeurs précision(accuracy), portée(range) et délai d'attaque(attack delay) sont inexistants. En effet ces 3 statistiques sont réservés exclusivement aux unités à distance comme l'archer par exemple. 
+
+Nous observons ensuite que les points de vie, l'attaque et le temps de rechargement sont les points forts du champion, car les valeurs sont élevées. Nous constatons qu'ils sont notamment supérieurs à la moyenne grâce au graphe en toile d'araignée.
+Puis nous remarquons vite les points faibles de l'unité à savoir sa lenteur et son manque d'armure qui sont largement en dessous de la moyenne.
+
+Enfin, le diagramme des coûts nous montre que le champion ne coûte pas beaucoup de ressources. En effet les coûts du champion comparés à la moyenne des coûts en ressources que nous avons analysées dans la première partie sont très faible. 
+
+
+**Ce que nous pouvons en conclure : **
+
+À partir de l'analyse ci-dessous, nous pouvons conclure que le champion est une bonne unité de combat corps-à-corps, qu'il ne necessite pas beaucoup de temps de rechargement et est très peu coûteux. Ses défauts sont sa vitesse de déplacement et son armure faible qui lui rend vulnérable aux attaques à distance et à la cavalerie lourde.
+
+De ce fait, le champion est une bonne unité à utiliser au début d'âge impériale car il est facile à produire permettant ainsi au joueur d'avoir une bonne unité sous la main, mais aussi en fin de partie lorsque l'or se fait rare.
+
+
+
+# III. Comment battre le paladin 
+
+Dans cette partie, nous allons voir comment battre le paladin. 
+
+Le paladin est considéré comme l'une des unités les plus puissantes du jeu, nous allons par la suite vous expliquer pourquoi. 
+
+Dans un premier temps, nous allons analyser le paladin pour mieux le comprendre et trouver ses points faibles. Et dans un second temps, nous allons choisir une statégie d'analyse pour trouver une unité forte contre lui. 
+
+## 1. Statistique du paladin 
+Dans cette section, nous allons présenter et analyser le paladin.
+
+### a) Illustration du paladin
+```{r, fig.align='left',out.width = "200px"}
+knitr::include_graphics("Image/paladin.png")
+```
+
+
+### b) Descriptions générales et statistique du paladin
+
+![](Image/paladin1.png)
+
+### c) Coûts en ressources du paladin
+
+![](Image/paladin2.png)
+
+### d) Analyse des graphiques de l'unité
+
+**Ce que nous constatons : **  
+
+Tout d'abord, d'après la description nous pouvons savoir que le paladin est une unité de Age of Kings (jeu de base), de l'âge impérial et qu'il est l'évoluition du cavalier. On constate également que l'unité est spécialisé dans l'attaque mêlée. 
+
+Ensuite, à partir des statistiques, nous observons que le paladin ne peut pas attaquer à distance comme le champion que nous avons vu précédemment. En effet, comme pour le champion, les valeurs précision(accuracy), portée(range) et délai d'attaque(attack delay) sont inexistantes.
+
+Nous observons ensuite que les points de vie et la vitesse de déplacement sont très élevées, nous voyons sur le graphe en toile d'araignée que ces deux statistiques sont presque au maximum. 
+Nous observons également que le paladin a une bonne attaque, défense au corps-à-corps et à distance et un bon temps de rechargement, nous voyons sur les graphes que ces statistiques sont dans la moyenne. 
+Nous remarquons que l'unique statistique du paladin qui n'est pas bonne est son champs de vision. 
+
+Pour finir, le diagramme des coûts nous montre que le paladin revient relativement chère au joueur, notamment en or.
+
+**Ce que nous pouvons en conclure : **
+
+À partir de l'analyse ci-dessous, nous pouvons conclure que le paladin est une unité de combat corps-à-corps très puissante avec une attaque supérieure à la moyenne. Il est rapide et très résistant grâce à ses points de vie très élevées et à sa défense. 
+Son unique point faible reste son champ de vision peu élevée qui lui permet pas de voir les unités qui sont situées au loin.
+
+## 2. Analyse d'unités pour vaincre le paladin 
+
+Comme vous venez de le voir dans la section précédente, les statistiques du paladin sont très bonnes, et certains disent même qu'il s'agit de la meilleure unité du jeu. Est-elle pour autant invincible ? N'y-a-t'il pas d'autres unités capables de la contrer avec force ? c'est ce que nous allons découvrir dans cette section.
+
+### a) Stratégie
+
+Pour trouver une unité qui bat notre paladin, nous pouvons raisonner en choisissant plusieurs stratégies.  
+Comme nous avons vu que la statistique la plus basse du paladin est le champ de vision, nous pouvons alors faire une sélection de toutes les unités ayant une plus grande ligne de mire, leur offrant un avantage de vision contre ce paladin, le détectant avant.
+Cependant pour trouver notre unité, nous avons choisi d'utiliser la stratégie de **la loi du plus fort**. Evidemment, une unité ayant plus de points de vie et plus de dégât d'attaque que le paladin, est forcément plus forte et donc gagnante.
+Pour trouver ces potentielles unités, nous allons procéder en deux étapes.  
+
+1. Sélectionner toutes les unités ayant plus de dégât que le paladin. 
+2. Sélectionner parmi les unités du premier point, les unités ayant plus de points de vie que le paladin.
+
+Au final, nous aurons les unités qui seront capables de battre notre paladin (si elles existent).
+Si nous ne trouvons aucune unité répondant à ces critères, il faudra changer de stratégie.
+
+### b) Sélection des unités faisant plus de dégâts que le paladin
+
+Nous avons donc, dans un premier temps, sélectionné toutes les unités ayant plus de dégât que le paladin, le graphe ci-dessous les représente : 
+
+```{r}
+#ggplot : Diagramme en bâtons
+pala_attck <- as.integer(data_f[62,"Attack"])
+pala_los <- as.integer(data_f[62,"Line_of_Sight"])
+pala_health <- as.integer(data_f[62,"HP"])
+
+
+more_attack <- subset(data_f, Attack> pala_attck)
+more_health <- subset(more_attack,HP>pala_health)
+more_speed <- subset(more_health,Line_of_Sight>pala_los)
+
+
+graphe78 <- ggplot(more_attack, aes(x=Name,y =Attack, fill=Name)) + 
+ geom_bar(stat="identity") + 
+ labs(title = "Unité plus forte que le paladin en attaque", y = "dégât d'attaque") 
+
+ggplotly(graphe78 + theme(axis.text.x=element_blank()))
+
+```
+
+**Ce que nous constatons : ** 
+Nous constatons qu'il existe **21 unités** ayant plus de dégât que le paladin.
+
+**Ce que nous pouvons en conclure : **
+Nous pouvons conclure que ces 21 unités peuvent potentiellement vaincre le paladin, il reste à savoir lesquelles ont plus de vie que lui et nous obtiendrons notre unité.
+
+
+### c) Ajout du critère : plus de points de vie que le paladin
+
+Pour faire du ménage parmi tous ces candidats et trouver notre unité, nous ajoutons le critère des points de vie supérieure à ceux du paladin.
+Ainsi, nous aurons le, ou les unités capables de battre le paladin en suivant la stratégie de **la loi du plus fort**.
+Le graphe ci-dessous montre le résultat de cette opération : 
+
+```{r}
+#ggplot : Diagramme en bâtons
+graphe79 <- ggplot(more_health, aes(x=Name,y =HP, fill=Name)) + 
+ geom_bar(stat="identity") + 
+ labs(title = "Unité plus forte que le paladin en attaque et ayant plus de points de vie", y = "Points de vie") 
+
+ggplotly(graphe79 + theme(axis.text.x=element_blank()))
+
+```
+
+**Ce que nous constatons : ** 
+Nous constatons qu'il existe 4 unités qui remplissent les critères.
+Nous avons l'éléphant de guerre, le bateau-tortue et leur version élite, qui correspondent à une amélioration de l'unité de base.
+
+**Ce que nous pouvons en conclure : **  
+Nous pouvons conclure qu'il existe des unités capable de battre le paladin suivant cette stratégie.
+En revanche, le bateau tortue peux se déplacer uniquement dans l'eau, le paladin étant une unité terrestre, la meilleure unité contre lui est donc **l'éléphant de guerre**.
+Il ne reste plus qu'à vérifier en jeu s'il s'agit de la réalité.
+
+### d) Arène de combat
+
+Après avoir obtenu ces résultats, nous avons conçu une arène dans le jeu pour tester si ce que nous avions trouvé est vrai.
+Pour ce combat, nous avons choisi de prendre l'éléphant de guerre comme adversaire au paladin.
+
+```{r, fig.align='center',out.width = "400px"}
+knitr::include_graphics("Image/versus.png")
+```
+
+```{r, fig.align='center'}
+knitr::include_graphics("Image/elephant.gif")
+```
+
+**Ce que nous pouvons en conclure : **  
+L'issue du combat est unanime, un éléphant de guerre bat un paladin en 1 vs 1.  
+Nous avons donc répondu à notre questionnement : comment battre un paladin ? En utilisant un **éléphant de guerre**.
+
+**Fin du rapport, merci d'avoir lu.**
