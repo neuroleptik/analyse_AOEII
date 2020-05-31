@@ -1,6 +1,6 @@
 # Age of empire Analysis
 This project is a data analysis about the famous "Age of empires II" game.
-If you want to see the full HTML output please visit : [https://jean-baptiste-brasselet.fr/projets/aoe.html]
+If you want to see the full HTML output please visit : https://jean-baptiste-brasselet.fr/projets/aoe.html
 
 # Content
 Here you can find the HTML output produced by my .rmd file, which is on my portfolio. There is also the code of my Rshiny application including ui.R and server.R.
