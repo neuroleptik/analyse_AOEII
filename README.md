@@ -4,7 +4,7 @@
 Here you can find the HTML output produced by my .rmd file, which is on my portfolio. There is also the code of my Rshiny application including ui.R and server.R.
 
 # Rshiny application execution
-Please load ui.r and server.r files first on your Rstudio IDE. Then click on the green arrow to run the app. 
+Please load ui.r and server.r files first on your Rstudio IDE. Then click on the green arrow to run the app.   
 **Note :** I Invite you to extend the window size of aplication, in order to display the unit's statistics that are hidden on the nativ window size.
 
 # Packages used
